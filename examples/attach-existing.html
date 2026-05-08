@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DEI SDK — Attach to existing scene</title>
+<style>html,body{margin:0;padding:0;background:#000;overflow:hidden}canvas{display:block}</style>
+</head>
+<body>
+<!--
+  Plugin mode: you already have a Three.js scene. DEI just attaches.
+  Useful for retrofitting an existing 3D web project.
+-->
+<video id="bgv" playsinline muted style="position:fixed;top:0;left:0;width:100vw;height:100vh;object-fit:cover;transform:scaleX(-1);z-index:0"></video>
+<canvas id="c" style="position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:1"></canvas>
+<video id="trkv" playsinline muted style="display:none"></video>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { DEI } from '../src/dei.js';
+
+// === Your existing Three.js scene ===
+const canvas = document.getElementById('c');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+renderer.setClearColor(0, 0);
+renderer.setSize(innerWidth, innerHeight);
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(50, innerWidth/innerHeight, .01, 100);
+camera.position.set(0, 0, 2);
+scene.add(new THREE.AmbientLight(0x506070, 1));
+scene.add(new THREE.DirectionalLight(0xffffff, 2.5).translateX(2).translateY(3).translateZ(5));
+
+// Wire up your own camera background (DEI doesn't do it in attach mode).
+const bgVid = document.getElementById('bgv');
+const trkVid = document.getElementById('trkv');
+const stream = await navigator.mediaDevices.getUserMedia({
+  video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } }
+});
+bgVid.srcObject = stream.clone(); bgVid.play();
+trkVid.srcObject = stream;        trkVid.play();
+
+const cube = new THREE.Mesh(
+  new THREE.BoxGeometry(0.2, 0.2, 0.2),
+  new THREE.MeshStandardMaterial({ color: 0x3399ff })
+);
+cube.position.set(0.3, 0.2, 0);
+scene.add(cube);
+
+// === Attach DEI ===
+const dei = await DEI.attach({
+  scene, camera, renderer, videoElement: trkVid,
+  handModelUrl: '../assets/holo_hands.glb',
+  autoStartCamera: false, // we already started it
+  autoStart: false,        // we own the render loop below
+});
+
+dei.makeGrabbable(cube, { radius: 0.15, physics: true });
+
+// === Your render loop owns timing; DEI is a plugin ===
+const clock = new THREE.Clock();
+function tick() {
+  requestAnimationFrame(tick);
+  const dt = Math.min(clock.getDelta(), 0.05);
+  dei.update(dt);
+  renderer.render(scene, camera);
+}
+tick();
+</script>
+</body>
+</html>

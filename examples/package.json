@@ -1,0 +1,28 @@
+{
+  "name": "dei-sdk",
+  "version": "0.1.0",
+  "description": "Hand-tracking AR SDK: 42-point rigged hand mesh, pinch/grab/throw gestures, physics, voice triggers. Plug into any Three.js project.",
+  "type": "module",
+  "main": "src/dei.js",
+  "module": "src/dei.js",
+  "exports": {
+    ".": "./src/dei.js",
+    "./rigged-hand": "./src/rigged-hand.js",
+    "./gestures": "./src/gestures.js",
+    "./tracking": "./src/tracking.js",
+    "./physics": "./src/physics.js",
+    "./voice": "./src/voice.js",
+    "./constants": "./src/constants.js",
+    "./coords": "./src/coords.js",
+    "./assets/*": "./assets/*"
+  },
+  "files": ["src", "assets", "examples", "README.md"],
+  "peerDependencies": {
+    "three": ">=0.150"
+  },
+  "keywords": [
+    "ar", "webxr", "hand-tracking", "mediapipe", "three.js",
+    "gesture", "pinch", "grab", "physics", "cannon-es", "whisper", "voice"
+  ],
+  "license": "MIT"
+}

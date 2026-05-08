@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DEI SDK — Minimal</title>
+<style>html,body{margin:0;padding:0;background:#000;overflow:hidden}</style>
+</head>
+<body>
+<!--
+  Minimal: open this file → grant camera → ghost-blue hands appear, tracked + meshed live.
+  No buttons, no dei.start(). Loop runs automatically.
+-->
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+<script type="module">
+import { DEI } from '../src/dei.js';
+await DEI.create({ handModelUrl: '../assets/holo_hands.glb' });
+</script>
+</body>
+</html>

@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DEI SDK — Voice triggers</title>
+<style>
+  html,body{margin:0;padding:0;background:#000;overflow:hidden;color:#9cf;font-family:monospace}
+  #hud{position:fixed;top:14px;left:50%;transform:translateX(-50%);z-index:20;background:#0008;padding:6px 14px;border-radius:6px}
+</style>
+</head>
+<body>
+<div id="hud">Say: "spawn cube" / "spawn ball" / "fire" / "hide"</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { DEI } from '../src/dei.js';
+
+// HOST PROVIDES THE KEY — never hardcode in distributed code.
+const apiKey = prompt('OpenAI API key (sk-...):') || '';
+
+const dei = await DEI.create({
+  handModelUrl: '../assets/holo_hands.glb',
+  voice: { apiKey, interval: 4000 },
+});
+
+const spawned = [];
+function spawn(geom, color) {
+  const m = new THREE.Mesh(geom, new THREE.MeshStandardMaterial({ color }));
+  m.position.set((Math.random()-.5)*.4, 0.2, 0);
+  dei.scene.add(m);
+  const g = dei.makeGrabbable(m, { radius: 0.12, physics: true });
+  spawned.push(m);
+}
+
+dei.voice.register(/\bcube|box\b/, () => spawn(new THREE.BoxGeometry(.18,.18,.18), 0x66ccff), 'spawn_cube');
+dei.voice.register(/\bball|sphere\b/, () => spawn(new THREE.SphereGeometry(.1,32,32), 0xff7733), 'spawn_ball');
+dei.voice.register(/\bhide|clear|remove\b/, () => {
+  for (const m of spawned) dei.scene.remove(m);
+  spawned.length = 0;
+}, 'hide');
+
+dei.on('transcript', t => document.getElementById('hud').textContent = '🎤 ' + t);
+
+dei.start();
+</script>
+</body>
+</html>

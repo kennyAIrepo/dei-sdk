@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>DEI · Live Hand AR</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{overflow:hidden;background:#000;font-family:'Courier New',monospace}
+  #hint{
+    position:fixed;bottom:20px;left:50%;transform:translateX(-50%);
+    z-index:30;color:rgba(150,220,255,.7);font-size:11px;letter-spacing:1px;
+    background:rgba(0,10,20,.6);padding:8px 18px;border-radius:6px;
+    backdrop-filter:blur(8px);pointer-events:none;
+    border:1px solid rgba(120,200,255,.15);
+  }
+</style>
+</head>
+<body>
+<!--
+  ████████████████████████████████████████████████████████████████
+  DEI · SHAREABLE QUICKSTART
+  Open this URL → grant camera → blue ghost hands appear instantly,
+  tracking, meshing, deforming. A ball spawns in front; pinch-grab it,
+  squeeze with two hands to scale, release to throw with physics.
+  ████████████████████████████████████████████████████████████████
+-->
+<div id="hint">PINCH · GRAB · TWO-HAND SCALE · THROW</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { DEI } from './src/dei.js';
+
+const dei = await DEI.create({
+  handModelUrl: './assets/holo_hands.glb',
+  pose: true,
+  physics: true,
+});
+
+// One demo ball, grabbable + throwable + scalable.
+const ball = new THREE.Mesh(
+  new THREE.SphereGeometry(0.12, 48, 48),
+  new THREE.MeshStandardMaterial({
+    color: 0xff5522, metalness: 0.15, roughness: 0.55, emissive: 0x331100, emissiveIntensity: 0.4
+  })
+);
+ball.position.set(0, 0.15, 0);
+dei.scene.add(ball);
+
+dei.makeGrabbable(ball, {
+  radius: 0.12,
+  physics: true,
+  mass: 0.6,
+  scalable: true,
+});
+</script>
+</body>
+</html>
