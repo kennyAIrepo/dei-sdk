@@ -12,10 +12,13 @@ import { DEFAULT_HAND_MODEL_URL } from './constants.js';
 import { makeMp2s } from './coords.js';
 import { loadRiggedHands } from './rigged-hand.js';
 import { initTracking, makeDetector } from './tracking.js';
-import { Grabbable, GrabManager } from './gestures.js';
+import { Grabbable, GrabManager, ThumbUpTrigger, HandWaveDetector, isPinch, pinchPoint } from './gestures.js';
 import { Physics, poseToBodyPoints, detectFloorY } from './physics.js';
 import { VoiceController } from './voice.js';
 import { VoicePanel } from './spatial-ui.js';
+import { Gallery } from './gallery-ui.js';
+import { searchModels, loadModel } from './sketchfab.js';
+import { parseSpawnIntent } from './intent.js';
 
 class EventBus {
   constructor() { this.h = {}; }
@@ -41,6 +44,11 @@ class DEI {
     this.physics = null;
     this.grab = new GrabManager();
     this.voice = null;
+    this.gallery = null;
+    this._sketchfab = null;             // { searchUrl, downloadUrl } or null
+    this._waveDet = [null, null];       // per-hand HandWaveDetector
+    this._thumbTrig = [null, null];     // per-hand ThumbUpTrigger
+    this._pendingSpawn = null;          // { model } locked but not yet pinch-grabbed
     this._tracker = null;
     this._detect = null;
     this._clock = new THREE.Clock();
@@ -117,7 +125,9 @@ class DEI {
     autoStart = true,
     showLoadingUI = true,
     ui = true,              // mount the spatial dialogue panel; pass {} for options or false to skip
+    sketchfab = true,       // mount gallery + intent flow; pass {searchUrl, downloadUrl} or false to skip
   } = {}) {
+    const opts_sketchfab = sketchfab;
     this.scene = scene; this.camera = camera; this.renderer = renderer;
     this.videoElement = videoElement;
     this.mp2s = makeMp2s(camera);
@@ -173,6 +183,29 @@ class DEI {
         const uiOpts = (typeof ui === 'object') ? ui : {};
         const voiceUsable = !!(this.voice.apiKey || this.voice.transcribeUrl);
         this.panel = new VoicePanel({ dei: this, voiceEnabled: voiceUsable, ...uiOpts });
+      }
+
+      // Sketchfab + intent flow (opt-in via opts.sketchfab).
+      if (opts_sketchfab !== false) {
+        this._sketchfab = {
+          searchUrl: (typeof opts_sketchfab === 'object' && opts_sketchfab.searchUrl) || '/api/sketchfab/search',
+          downloadUrl: (typeof opts_sketchfab === 'object' && opts_sketchfab.downloadUrl) || '/api/sketchfab/download',
+        };
+        this.gallery = new Gallery({
+          onLock: (model) => this._onGalleryLock(model),
+          onCancel: () => { this._pendingSpawn = null; },
+        });
+        // Gesture detectors per hand.
+        for (let h = 0; h < 2; h++) {
+          this._waveDet[h] = new HandWaveDetector({
+            onSwipe: (dir) => { if (this.gallery?.root.classList.contains('show')) this.gallery.scroll(dir); },
+          });
+          this._thumbTrig[h] = new ThumbUpTrigger({
+            onUp: () => { if (this.gallery?.root.classList.contains('show')) this.gallery.lock(); },
+          });
+        }
+        // Hook noMatch → intent parser → gallery search.
+        this.events.on('noMatch', (text) => this._handleSpawnText(text));
       }
     } catch (e) {
       this._setLoader('Error: ' + (e?.message || e), true);
@@ -243,6 +276,64 @@ class DEI {
     return c;
   }
 
+  // ── Sketchfab + intent flow ───────────────────────────────────────
+  // Public: kick off a search programmatically (e.g. wired to a button).
+  async searchSketchfab(query) {
+    if (!this._sketchfab || !this.gallery) return;
+    this.gallery.show();
+    this.gallery.setQuery(query);
+    this.gallery.setLoading(true);
+    try {
+      const results = await searchModels(query, this._sketchfab);
+      this.gallery.setResults(query, results);
+      this.events.emit('searchResults', { query, results });
+    } catch (e) {
+      this.gallery.setResults(query, []);
+      this.panel?.appendLog?.('err', 'sketchfab search failed');
+      console.warn(e);
+    }
+  }
+
+  async _handleSpawnText(text) {
+    const intent = parseSpawnIntent(text);
+    if (!intent || !this._sketchfab) return;
+    this.panel?.appendLog?.('sys', `searching: ${intent.target}`);
+    await this.searchSketchfab(intent.target);
+  }
+
+  _onGalleryLock(model) {
+    this._pendingSpawn = { model };
+    this.panel?.appendLog?.('sys', `locked "${model.name}" — pinch to grab`);
+    this.events.emit('galleryLock', model);
+  }
+
+  async _spawnLockedAt(scenePos) {
+    const pending = this._pendingSpawn;
+    if (!pending) return;
+    this._pendingSpawn = null;
+    this.gallery?.hide();
+    this.panel?.appendLog?.('sys', `loading "${pending.model.name}"…`);
+    try {
+      const { group } = await loadModel(pending.model.uid, {
+        ...this._sketchfab,
+        targetSize: 0.3,
+      });
+      group.position.copy(scenePos);
+      this.scene.add(group);
+      const g = this.makeGrabbable(group, {
+        radius: 0.15,
+        physics: !!this.physics,
+        mass: 0.6,
+        scalable: true,
+      });
+      this.events.emit('spawn', { model: pending.model, mesh: group, grabbable: g });
+      this.panel?.appendLog?.('sys', `spawned "${pending.model.name}"`);
+    } catch (e) {
+      console.warn('spawn failed:', e);
+      this.panel?.appendLog?.('err', `couldn't load "${pending.model.name}"`);
+    }
+  }
+
   // Per-frame update. Call from your render loop, or use start() to self-drive.
   update(dt) {
     const t = this._clock.elapsedTime;
@@ -267,6 +358,25 @@ class DEI {
     for (let h = 0; h < Math.min(this.handCount, 2); h++) {
       if (!this.hands?.[h]) continue;
       sls[h] = this.hands[h].map(this.mp2s);
+    }
+
+    // Gallery gestures — wave to scroll, thumb-up to lock, pinch to spawn.
+    if (this.gallery) {
+      const visible = this.gallery.root.classList.contains('show');
+      for (let h = 0; h < Math.min(this.handCount, 2); h++) {
+        const lm = this.hands?.[h];
+        if (!lm) continue;
+        if (visible && !this.gallery.locked) {
+          this._waveDet[h]?.update(lm[0], dt);
+        }
+        if (visible) {
+          this._thumbTrig[h]?.update(lm, dt);
+        }
+        // Pinch-to-spawn: when locked, a pinch grabs the model into the scene.
+        if (this._pendingSpawn && sls[h] && isPinch(lm)) {
+          this._spawnLockedAt(pinchPoint(sls[h]));
+        }
+      }
     }
 
     // Gestures BEFORE deform — so collider centers are current when hand-mesh skins.
@@ -304,7 +414,9 @@ class DEI {
   }
 }
 
-export { DEI, Grabbable, GrabManager, Physics, VoiceController, VoicePanel };
+export { DEI, Grabbable, GrabManager, Physics, VoiceController, VoicePanel, Gallery };
+export { searchModels, loadModel } from './sketchfab.js';
+export { parseSpawnIntent } from './intent.js';
 export * from './gestures.js';
 export { RiggedHand, loadRiggedHands } from './rigged-hand.js';
 export { makeMp2s, buildFrame } from './coords.js';

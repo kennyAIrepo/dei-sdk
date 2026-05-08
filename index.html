@@ -12,20 +12,27 @@
     z-index:30;color:rgba(150,220,255,.7);font-size:11px;letter-spacing:1px;
     background:rgba(0,10,20,.6);padding:8px 18px;border-radius:6px;
     backdrop-filter:blur(8px);pointer-events:none;
-    border:1px solid rgba(120,200,255,.15);
+    border:1px solid rgba(120,200,255,.15);text-align:center;line-height:1.5;
   }
 </style>
 </head>
 <body>
 <!--
   ████████████████████████████████████████████████████████████████
-  DEI · SHAREABLE QUICKSTART
-  Open this URL → grant camera → blue ghost hands appear instantly,
-  tracking, meshing, deforming. A ball spawns; pinch-grab + throw.
-  Bottom: command panel — type, or tap the mic to opt in to voice.
+  DEI · LIVE HAND AR + SKETCHFAB
+  • Open URL → grant camera → blue ghost hands track in real time
+  • Bottom panel: type or speak a request like "give me a basketball"
+  • A gallery opens on the right with matching Sketchfab models
+  • Wave your hand left/right to scroll alternatives
+  • Thumb-up to lock the highlighted one
+  • Pinch your fingers to grab + spawn it into the scene
+  • Then it's a normal Grabbable: pinch / two-hand-scale / throw / collide
   ████████████████████████████████████████████████████████████████
 -->
-<div id="hint">PINCH · GRAB · TWO-HAND SCALE · THROW &nbsp;·&nbsp; TYPE OR SPEAK BELOW</div>
+<div id="hint">
+  SAY OR TYPE: "give me a [thing]" → 👋 wave to scroll → 👍 to lock → 🤏 pinch to grab<br>
+  THEN: pinch · two-hand-scale · throw · physics
+</div>
 
 <script type="importmap">
 {
@@ -36,87 +43,16 @@
 }
 </script>
 <script type="module">
-import * as THREE from 'three';
 import { DEI } from './src/dei.js';
 
-// ─── Voice config ────────────────────────────────────────────────
-// Same-origin proxy at /api/transcribe (Vercel Edge Function in /api/).
-// On Vercel: works automatically once OPENAI_API_KEY env var is set.
-// Local file:// preview: leave as-is, voice will fail gracefully → text mode still works.
-const TRANSCRIBE_URL = '/api/transcribe';
-
-const dei = await DEI.create({
+await DEI.create({
   handModelUrl: './assets/holo_hands.glb',
   pose: true,
   physics: true,
-  voice: TRANSCRIBE_URL ? { transcribeUrl: TRANSCRIBE_URL } : {},  // {} = text-only mode
-  ui: { title: 'DEI · COMMAND', placeholder: 'try: spawn cube, red, hide, big, small' },
+  voice: { transcribeUrl: '/api/transcribe' },   // proxy on Vercel
+  sketchfab: true,                                 // uses /api/sketchfab/* by default
+  ui: { title: 'DEI · COMMAND', placeholder: 'try: give me a basketball, an apple, a guitar…' },
 });
-
-// ─── Default demo ball ───────────────────────────────────────────
-const ball = makeBall(0xff5522);
-ball.position.set(0, 0.15, 0);
-dei.scene.add(ball);
-const ballHandle = dei.makeGrabbable(ball, { radius: 0.12, physics: true, mass: 0.6, scalable: true });
-
-const spawned = [ball];
-
-function makeBall(color) {
-  return new THREE.Mesh(
-    new THREE.SphereGeometry(0.12, 48, 48),
-    new THREE.MeshStandardMaterial({ color, metalness: 0.15, roughness: 0.55, emissive: color, emissiveIntensity: 0.15 })
-  );
-}
-function makeCube(color) {
-  return new THREE.Mesh(
-    new THREE.BoxGeometry(0.18, 0.18, 0.18),
-    new THREE.MeshStandardMaterial({ color, metalness: 0.2, roughness: 0.5, emissive: color, emissiveIntensity: 0.15 })
-  );
-}
-
-function spawn(mesh) {
-  mesh.position.set((Math.random()-.5)*.3, 0.25, 0);
-  dei.scene.add(mesh);
-  dei.makeGrabbable(mesh, { radius: 0.12, physics: true, mass: 0.5, scalable: true });
-  spawned.push(mesh);
-}
-
-// ─── Commands (text + voice both feed these) ─────────────────────
-dei.voice.register(/\b(cube|box)\b/,           () => spawn(makeCube(0x66ccff)),                 'spawn cube');
-dei.voice.register(/\b(ball|sphere)\b/,        () => spawn(makeBall(0xff7733)),                 'spawn ball');
-dei.voice.register(/\b(red|crimson)\b/,        () => recolorLast(0xff3344),                    'red');
-dei.voice.register(/\b(blue|sky)\b/,           () => recolorLast(0x44aaff),                    'blue');
-dei.voice.register(/\b(green|emerald)\b/,      () => recolorLast(0x44ff88),                    'green');
-dei.voice.register(/\b(big|bigger|grow)\b/,    () => scaleLast(1.4),                            'bigger');
-dei.voice.register(/\b(small|smaller|shrink)\b/, () => scaleLast(0.7),                          'smaller');
-dei.voice.register(/\b(hide|clear|remove)\b/,  () => clearAll(),                                'clear');
-dei.voice.register(/\b(gravity|float|zero.?g)\b/, () => toggleGravity(),                        'toggle gravity');
-dei.voice.register(/\b(help|commands)\b/,      () => showHelp(),                                'help');
-
-function recolorLast(color) {
-  const m = spawned[spawned.length - 1];
-  if (m && m.material) { m.material.color.setHex(color); m.material.emissive.setHex(color); }
-}
-function scaleLast(f) {
-  const m = spawned[spawned.length - 1];
-  if (m) m.scale.multiplyScalar(f);
-}
-function clearAll() {
-  for (const m of spawned) dei.scene.remove(m);
-  spawned.length = 0;
-}
-let _g = -6;
-function toggleGravity() {
-  if (!dei.physics?.world) return;
-  _g = _g === 0 ? -6 : 0;
-  dei.physics.world.gravity.set(0, _g, 0);
-}
-function showHelp() {
-  dei.panel?.appendLog('sys', 'try: spawn cube · spawn ball · red · blue · green · bigger · smaller · clear · gravity');
-}
-
-// Welcome line
-dei.panel?.appendLog('sys', 'ready. type or tap mic. say "help" for commands.');
 </script>
 </body>
 </html>

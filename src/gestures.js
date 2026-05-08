@@ -59,6 +59,86 @@ export function countNear(sl, target, maxDist) {
 }
 
 // ─────────────────────────────────────────────────────────────────────
+// Thumb-up: thumb extended up, other 4 fingers folded down.
+// Operates on raw normalized landmarks (lower y = higher on screen).
+// Returns true while pose is held; pair with debounce to fire once per gesture.
+// ─────────────────────────────────────────────────────────────────────
+export function isThumbUp(lm) {
+  if (!lm) return false;
+  const t = lm[4], tIp = lm[3], tMcp = lm[2], wrist = lm[0];
+  const idxTip = lm[8], idxMcp = lm[5];
+  const midTip = lm[12], midMcp = lm[9];
+  const ringTip = lm[16], ringMcp = lm[13];
+  const pinkyTip = lm[20], pinkyMcp = lm[17];
+  // Thumb pointing UP (lower y is higher visually)
+  const thumbExtended = t.y < tIp.y && tIp.y < tMcp.y && (wrist.y - t.y) > 0.10;
+  // Other fingers folded: tip BELOW or near the MCP
+  const idxFolded   = idxTip.y   > idxMcp.y   - 0.02;
+  const midFolded   = midTip.y   > midMcp.y   - 0.02;
+  const ringFolded  = ringTip.y  > ringMcp.y  - 0.02;
+  const pinkyFolded = pinkyTip.y > pinkyMcp.y - 0.02;
+  return thumbExtended && idxFolded && midFolded && ringFolded && pinkyFolded;
+}
+
+// Edge-triggered version: fires onUp() only on rising transitions, with cooldown.
+export class ThumbUpTrigger {
+  constructor({ cooldown = 0.8, onUp = null } = {}) {
+    this.cooldown = cooldown;
+    this.onUp = onUp;
+    this._wasUp = false;
+    this._cool = 0;
+  }
+  update(lm, dt) {
+    this._cool = Math.max(0, this._cool - dt);
+    const up = isThumbUp(lm);
+    if (up && !this._wasUp && this._cool === 0) {
+      this._cool = this.cooldown;
+      this.onUp?.();
+    }
+    this._wasUp = up;
+    return up;
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Hand-wave swipe detector: rolling-window wrist X velocity → 'left' | 'right'.
+// Use raw normalized x (0..1). Coordinate is already mirror-flipped by tracker,
+// so 'right' means user's actual right.
+// ─────────────────────────────────────────────────────────────────────
+export class HandWaveDetector {
+  constructor({
+    windowMs = 350,
+    minDx = 0.18,         // normalized x distance over the window
+    cooldown = 0.4,       // seconds between fires
+    onSwipe = null,       // ('left'|'right') => void
+  } = {}) {
+    this.windowMs = windowMs;
+    this.minDx = minDx;
+    this.cooldown = cooldown;
+    this.onSwipe = onSwipe;
+    this._hist = [];
+    this._cool = 0;
+  }
+  update(wristLm, dt) {
+    this._cool = Math.max(0, this._cool - dt);
+    if (!wristLm) { this._hist = []; return null; }
+    const now = performance.now();
+    this._hist.push({ x: wristLm.x, t: now });
+    while (this._hist.length && now - this._hist[0].t > this.windowMs) this._hist.shift();
+    if (this._cool > 0 || this._hist.length < 3) return null;
+    const dx = this._hist[this._hist.length - 1].x - this._hist[0].x;
+    if (Math.abs(dx) >= this.minDx) {
+      const dir = dx > 0 ? 'right' : 'left';
+      this._cool = this.cooldown;
+      this._hist = [];
+      this.onSwipe?.(dir);
+      return dir;
+    }
+    return null;
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────
 // Grabbable: per-object grab/throw/scale state machine.
 // `mesh` is your Three.js Object3D; we never replace it, only drive transform.
 // ─────────────────────────────────────────────────────────────────────

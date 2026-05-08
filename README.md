@@ -96,6 +96,31 @@ dei.on('voiceStatus',    s => {});  // 'on' | 'off' | 'wait' | 'denied'
 
 ---
 
+## Sketchfab gallery — say what you want, grab it
+
+Speak or type "give me a [thing]" and the SDK does the rest:
+1. **Intent parser** ([src/intent.js](./src/intent.js)) extracts the noun via regex (no LLM cost on the hot path).
+2. **Sketchfab client** ([src/sketchfab.js](./src/sketchfab.js)) hits `/api/sketchfab/search` (proxied) for matching models.
+3. **Gallery UI** ([src/gallery-ui.js](./src/gallery-ui.js)) shows a semi-transparent column with the top match in a main frame and alternatives in a horizontal scroll strip below.
+4. **Gestures take over:**
+   - 👋 Wave your hand left/right → scrolls the alternatives strip.
+   - 👍 Thumb-up → locks the currently-highlighted model.
+   - 🤏 Pinch → spawns the locked model into the scene at the pinch position.
+5. After spawn, the model is a normal `Grabbable` — pinch/two-hand-scale/throw, hand-mesh squishes around it.
+
+```js
+DEI.create({
+  sketchfab: true,                          // default: uses /api/sketchfab/*
+  // sketchfab: { searchUrl, downloadUrl }, // override proxy paths
+  // sketchfab: false,                      // disable entirely
+});
+
+// programmatic search (e.g. wired to a button click):
+await dei.searchSketchfab('basketball');
+```
+
+**Required env vars on Vercel:** `SKETCHFAB_API_TOKEN` (in addition to `OPENAI_API_KEY` for voice). Get one at https://sketchfab.com/settings/password (API tokens section).
+
 ## Voice / text command bus
 
 The same regex registry handles **both** voice transcripts and typed input from the spatial panel. Voice is opt-in — the mic stays off until the user taps it.
