@@ -13,81 +13,92 @@ const CSS = `
 #_dei_gal {
   position: fixed; top: 80px; right: 18px; bottom: 100px;
   z-index: 40; width: min(320px, 30vw);
-  display: flex; flex-direction: column; gap: 10px;
-  font-family: 'Courier New', monospace; color: rgba(180,230,255,.92);
-  background: linear-gradient(180deg, rgba(6,16,28,.78), rgba(2,8,16,.88));
-  border: 1px solid rgba(100,180,255,.22);
-  border-radius: 14px; backdrop-filter: blur(12px);
-  box-shadow: 0 6px 30px rgba(0,40,80,.4), inset 0 0 0 1px rgba(100,200,255,.05);
-  padding: 12px; pointer-events: auto;
-  opacity: 0; transform: translateX(20px); transition: opacity .35s, transform .35s;
+  display: flex; flex-direction: column; gap: 8px;
+  font-family: 'Courier New', monospace; color: #aadfff;
+  background: transparent;
+  border: 1px solid rgba(120, 200, 255, 0.55);
+  border-radius: 3px;
+  box-shadow: 0 0 18px rgba(80, 180, 255, 0.18), inset 0 0 0 1px rgba(120, 200, 255, 0.05);
+  padding: 10px; pointer-events: auto;
+  opacity: 0; transform: translateX(20px); transition: opacity .3s, transform .3s;
 }
 #_dei_gal.show { opacity: 1; transform: translateX(0); }
-#_dei_gal._gHdr {
+
+#_dei_gal ._gHdr {
   display: flex; align-items: center; gap: 8px;
-  font-size: 10px; letter-spacing: 2px; text-transform: uppercase;
-  color: rgba(120,200,255,.55);
+  font-size: 9px; letter-spacing: 2px; text-transform: uppercase;
+  color: rgba(140, 210, 255, 0.6);
 }
-#_dei_gal ._q { flex: 1; color: rgba(200,235,255,.85); text-transform: none; letter-spacing: 1px; font-size: 11px; }
+#_dei_gal ._q { flex: 1; color: #aadfff; text-transform: none; letter-spacing: 1px; font-size: 11px; }
 #_dei_gal ._x {
-  background: none; border: none; color: rgba(120,200,255,.4);
+  background: none; border: none; color: rgba(140, 210, 255, 0.4);
   cursor: pointer; font-size: 14px; padding: 0 4px; font-family: inherit;
 }
-#_dei_gal ._x:hover { color: rgba(180,230,255,.9); }
+#_dei_gal ._x:hover { color: #aadfff; }
 
 #_dei_gal ._main {
   position: relative; flex: 1; min-height: 160px;
-  background: rgba(0,8,20,.4); border: 1px solid rgba(100,180,255,.15);
-  border-radius: 10px; overflow: hidden;
+  background: transparent;
+  border: 1px solid rgba(120, 200, 255, 0.3);
+  border-radius: 2px;
+  overflow: hidden;
   display: flex; align-items: center; justify-content: center;
 }
 #_dei_gal ._main img {
-  width: 100%; height: 100%; object-fit: contain;
+  max-width: 100%; max-height: 100%; object-fit: contain;
   transition: opacity .25s;
+  /* the model image itself stays fully solid against the see-through frame */
 }
-#_dei_gal ._main._locked { border-color: rgba(120,255,180,.7); box-shadow: 0 0 16px rgba(120,255,180,.3); }
+#_dei_gal ._main._locked { border-color: rgba(120, 255, 180, 0.85); box-shadow: 0 0 18px rgba(120, 255, 180, 0.35); }
 #_dei_gal ._meta {
-  position: absolute; left: 10px; right: 10px; bottom: 8px;
-  font-size: 11px; color: rgba(200,230,255,.85);
-  background: rgba(0,8,20,.6); padding: 4px 8px; border-radius: 4px;
+  position: absolute; left: 6px; right: 6px; bottom: 6px;
+  font-size: 10px; color: #aadfff;
+  background: rgba(0, 10, 22, 0.55);
+  border: 1px solid rgba(120, 200, 255, 0.2);
+  padding: 3px 6px; border-radius: 2px;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  letter-spacing: 0.5px;
 }
 #_dei_gal ._badge {
-  position: absolute; top: 8px; left: 8px;
-  background: rgba(120,255,180,.85); color: #001;
-  font-size: 9px; padding: 3px 8px; border-radius: 999px; letter-spacing: 1px;
+  position: absolute; top: 6px; left: 6px;
+  background: rgba(120, 255, 180, 0.9); color: #001;
+  font-size: 9px; padding: 3px 8px; border-radius: 2px; letter-spacing: 1px;
   display: none; font-weight: bold;
 }
 #_dei_gal._lockedState ._badge { display: block; }
 
 #_dei_gal ._strip {
-  display: flex; gap: 6px; overflow-x: auto; overflow-y: hidden;
-  padding: 4px 2px; min-height: 64px;
-  scrollbar-width: thin; scrollbar-color: rgba(100,180,255,.3) transparent;
+  display: flex; gap: 5px; overflow-x: auto; overflow-y: hidden;
+  padding: 2px; min-height: 56px;
+  scrollbar-width: thin; scrollbar-color: rgba(120, 200, 255, 0.3) transparent;
   scroll-behavior: smooth;
 }
-#_dei_gal ._strip::-webkit-scrollbar { height: 4px; }
-#_dei_gal ._strip::-webkit-scrollbar-thumb { background: rgba(100,180,255,.3); border-radius: 2px; }
+#_dei_gal ._strip::-webkit-scrollbar { height: 3px; }
+#_dei_gal ._strip::-webkit-scrollbar-thumb { background: rgba(120, 200, 255, 0.4); border-radius: 1px; }
 #_dei_gal ._strip ._th {
-  flex: 0 0 auto; width: 64px; height: 56px;
-  border: 1px solid rgba(100,180,255,.15); border-radius: 6px;
-  overflow: hidden; cursor: pointer; opacity: .55; transition: all .2s;
-  background: rgba(0,8,20,.4);
+  flex: 0 0 auto; width: 60px; height: 50px;
+  border: 1px solid rgba(120, 200, 255, 0.2); border-radius: 2px;
+  overflow: hidden; cursor: pointer; opacity: .65; transition: all .15s;
+  background: transparent;
 }
 #_dei_gal ._strip ._th img { width: 100%; height: 100%; object-fit: cover; }
-#_dei_gal ._strip ._th._active { opacity: 1; border-color: rgba(120,200,255,.7); transform: scale(1.05); }
-#_dei_gal ._strip ._th:hover { opacity: .85; }
+#_dei_gal ._strip ._th._active {
+  opacity: 1; border-color: rgba(120, 200, 255, 0.95);
+  box-shadow: 0 0 8px rgba(120, 200, 255, 0.4); transform: scale(1.06);
+}
+#_dei_gal ._strip ._th:hover { opacity: .9; }
 
 #_dei_gal ._hint {
-  font-size: 10px; color: rgba(140,200,240,.5); letter-spacing: 1px;
-  text-align: center; padding: 4px 0;
+  font-size: 9px; color: rgba(140, 210, 255, 0.5); letter-spacing: 1px;
+  text-align: center; padding: 2px 0;
 }
 #_dei_gal ._loader {
   position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
-  font-size: 10px; color: rgba(120,200,255,.5); letter-spacing: 2px;
+  font-size: 10px; color: rgba(140, 210, 255, 0.55); letter-spacing: 2px;
+  background: rgba(0, 10, 22, 0.25);
 }
 #_dei_gal ._loader._hide { display: none; }
-#_dei_gal ._empty { color: rgba(255,180,150,.7); font-size: 11px; text-align: center; padding: 16px; }
+#_dei_gal ._empty { color: #ffaadd; font-size: 11px; text-align: center; padding: 16px; }
 `;
 
 let _cssInjected = false;
