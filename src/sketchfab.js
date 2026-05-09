@@ -72,7 +72,7 @@ export async function loadModel(uid, opts = {}) {
   } else {
     gltf = await loadZippedGltf(info.url, loader);
   }
-  const group = normalize(gltf.scene, opts.targetSize ?? 0.3);
+  const group = normalize(gltf.scene, opts.targetSize ?? 0.15);
   return { group, gltf };
 }
 

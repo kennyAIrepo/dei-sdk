@@ -316,15 +316,17 @@ class DEI {
     try {
       const { group } = await loadModel(pending.model.uid, {
         ...this._sketchfab,
-        targetSize: 0.3,
+        targetSize: 0.15,   // small enough to fit in hand by default; user scales up via two-hand pinch
       });
       group.position.copy(scenePos);
       this.scene.add(group);
       const g = this.makeGrabbable(group, {
-        radius: 0.15,
+        radius: 0.10,
         physics: !!this.physics,
-        mass: 0.6,
+        mass: 0.4,
         scalable: true,
+        minScale: 0.3,
+        maxScale: 12,        // allow scaling up to ~real-world sizes
       });
       this.events.emit('spawn', { model: pending.model, mesh: group, grabbable: g });
       this.panel?.appendLog?.('sys', `spawned "${pending.model.name}"`);
