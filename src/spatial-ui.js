@@ -10,19 +10,19 @@ const CSS = `
   position: fixed; bottom: 10px; left: 50%; transform: translateX(-50%);
   z-index: 50; width: min(560px, 90vw);
   font-family: 'Courier New', monospace;
-  color: #88ff9f;
-  background: rgba(0, 14, 6, 0.28);
-  border: 1px solid rgba(120, 255, 150, 0.65);
+  color: #9fdaff;
+  background: rgba(0, 10, 22, 0.30);
+  border: 1px solid rgba(120, 200, 255, 0.7);
   border-radius: 3px;
   backdrop-filter: blur(6px);
-  box-shadow: 0 0 18px rgba(80, 255, 120, 0.18), inset 0 0 0 1px rgba(120, 255, 150, 0.06);
+  box-shadow: 0 0 18px rgba(80, 180, 255, 0.22), inset 0 0 0 1px rgba(120, 200, 255, 0.06);
   transition: opacity .25s, transform .25s;
 }
 #_dei_panel.collapsed { width: 38px; height: 38px; cursor: pointer; }
 #_dei_panel.collapsed > *:not(._dei_orb) { display: none; }
 #_dei_panel ._dei_orb {
   display: none; align-items: center; justify-content: center;
-  width: 100%; height: 100%; font-size: 16px; color: #88ff9f;
+  width: 100%; height: 100%; font-size: 16px; color: #9fdaff;
 }
 #_dei_panel.collapsed ._dei_orb { display: flex; animation: _deiPulse 2s infinite ease-in-out; }
 @keyframes _deiPulse { 0%,100%{opacity:.6} 50%{opacity:1} }
@@ -30,74 +30,74 @@ const CSS = `
 #_dei_panel ._hdr {
   display: flex; align-items: center; gap: 8px;
   padding: 4px 10px;
-  border-bottom: 1px solid rgba(120, 255, 150, 0.22);
+  border-bottom: 1px solid rgba(120, 200, 255, 0.25);
   font-size: 9px; letter-spacing: 2px; text-transform: uppercase;
-  color: rgba(140, 255, 170, 0.55);
+  color: rgba(140, 210, 255, 0.6);
 }
 #_dei_panel ._hdr ._title { flex: 1 }
 #_dei_panel ._hdr ._collapse {
-  background: none; border: none; color: rgba(140, 255, 170, 0.4);
+  background: none; border: none; color: rgba(140, 210, 255, 0.4);
   cursor: pointer; font-size: 13px; padding: 0 3px; font-family: inherit;
 }
-#_dei_panel ._hdr ._collapse:hover { color: #aaffba; }
+#_dei_panel ._hdr ._collapse:hover { color: #aadfff; }
 
 #_dei_panel ._mic {
-  background: rgba(0, 25, 10, 0.4);
-  border: 1px solid rgba(120, 255, 150, 0.4);
+  background: rgba(0, 18, 36, 0.4);
+  border: 1px solid rgba(120, 200, 255, 0.45);
   border-radius: 2px; padding: 2px 8px; font-size: 9px;
-  color: rgba(150, 255, 180, 0.8); cursor: pointer; font-family: inherit;
+  color: rgba(150, 215, 255, 0.85); cursor: pointer; font-family: inherit;
   display: flex; align-items: center; gap: 5px;
   letter-spacing: 1px; transition: all .15s;
 }
-#_dei_panel ._mic:hover { border-color: rgba(120, 255, 150, 0.8); color: #aaffba; }
-#_dei_panel ._mic[data-state="on"]     { background: rgba(40, 200, 80, 0.18); border-color: rgba(120, 255, 150, 0.95); color: #aaffba; }
-#_dei_panel ._mic[data-state="wait"]   { background: rgba(140, 200, 50, 0.15); border-color: rgba(200, 255, 100, 0.7); color: #ddff77; }
-#_dei_panel ._mic[data-state="denied"] { background: rgba(80, 30, 30, 0.4);    border-color: rgba(255, 130, 130, 0.55); color: #ff9999; }
+#_dei_panel ._mic:hover { border-color: rgba(120, 200, 255, 0.85); color: #aadfff; }
+#_dei_panel ._mic[data-state="on"]     { background: rgba(40, 130, 220, 0.22); border-color: rgba(120, 200, 255, 0.95); color: #aadfff; }
+#_dei_panel ._mic[data-state="wait"]   { background: rgba(180, 130, 220, 0.18); border-color: rgba(200, 150, 255, 0.7); color: #ddbbff; }
+#_dei_panel ._mic[data-state="denied"] { background: rgba(80, 30, 30, 0.4);     border-color: rgba(255, 130, 130, 0.55); color: #ff9999; }
 #_dei_panel ._mic ._dot {
-  width: 6px; height: 6px; border-radius: 50%; background: rgba(150, 200, 170, 0.4);
+  width: 6px; height: 6px; border-radius: 50%; background: rgba(160, 200, 230, 0.4);
 }
-#_dei_panel ._mic[data-state="on"]   ._dot { background: #6fff8e; animation: _deiBlink 1s infinite; box-shadow: 0 0 6px #6fff8e; }
-#_dei_panel ._mic[data-state="wait"] ._dot { background: #ddff66; animation: _deiBlink 1.4s infinite; }
+#_dei_panel ._mic[data-state="on"]   ._dot { background: #6fbcff; animation: _deiBlink 1s infinite; box-shadow: 0 0 6px #6fbcff; }
+#_dei_panel ._mic[data-state="wait"] ._dot { background: #ddbbff; animation: _deiBlink 1.4s infinite; }
 @keyframes _deiBlink { 0%,100%{opacity:1} 50%{opacity:.3} }
 
 #_dei_panel ._log {
   max-height: 88px; overflow-y: auto; padding: 4px 10px;
   font-size: 11px; line-height: 1.35;
-  scrollbar-width: thin; scrollbar-color: rgba(120, 255, 150, 0.3) transparent;
+  scrollbar-width: thin; scrollbar-color: rgba(120, 200, 255, 0.3) transparent;
 }
 #_dei_panel ._log::-webkit-scrollbar { width: 3px; }
-#_dei_panel ._log::-webkit-scrollbar-thumb { background: rgba(120, 255, 150, 0.4); border-radius: 1px; }
+#_dei_panel ._log::-webkit-scrollbar-thumb { background: rgba(120, 200, 255, 0.4); border-radius: 1px; }
 #_dei_panel ._log ._row { margin: 1px 0; }
-#_dei_panel ._log ._row._user { color: #9fffa8; }
-#_dei_panel ._log ._row._user:before { content: '› '; color: rgba(140, 255, 170, 0.5); }
-#_dei_panel ._log ._row._sys  { color: #6fff8e; font-size: 10px; }
+#_dei_panel ._log ._row._user { color: #aadfff; }
+#_dei_panel ._log ._row._user:before { content: '› '; color: rgba(140, 210, 255, 0.55); }
+#_dei_panel ._log ._row._sys  { color: #7fc8ff; font-size: 10px; }
 #_dei_panel ._log ._row._sys:before  { content: '✓ '; }
-#_dei_panel ._log ._row._err  { color: #ddff55; font-size: 10px; }
+#_dei_panel ._log ._row._err  { color: #ffaadd; font-size: 10px; }
 #_dei_panel ._log ._row._err:before  { content: '✗ '; }
 
 #_dei_panel ._inputRow {
   display: flex; gap: 4px; padding: 4px 8px;
-  border-top: 1px solid rgba(120, 255, 150, 0.22);
+  border-top: 1px solid rgba(120, 200, 255, 0.25);
 }
 #_dei_panel ._txt {
-  flex: 1; background: rgba(0, 18, 8, 0.45);
-  border: 1px solid rgba(120, 255, 150, 0.3);
+  flex: 1; background: rgba(0, 14, 28, 0.45);
+  border: 1px solid rgba(120, 200, 255, 0.3);
   border-radius: 2px; padding: 4px 8px;
   font-family: inherit; font-size: 11px;
-  color: #aaffaa; outline: none; transition: border .15s;
+  color: #aadfff; outline: none; transition: border .15s;
   letter-spacing: 0.5px;
 }
-#_dei_panel ._txt:focus { border-color: rgba(120, 255, 150, 0.85); box-shadow: 0 0 6px rgba(120, 255, 150, 0.25); }
-#_dei_panel ._txt::placeholder { color: rgba(140, 220, 160, 0.42); }
+#_dei_panel ._txt:focus { border-color: rgba(120, 200, 255, 0.85); box-shadow: 0 0 6px rgba(120, 200, 255, 0.3); }
+#_dei_panel ._txt::placeholder { color: rgba(140, 200, 230, 0.42); }
 #_dei_panel ._send {
-  background: rgba(20, 80, 35, 0.4);
-  border: 1px solid rgba(120, 255, 150, 0.55);
+  background: rgba(20, 60, 110, 0.4);
+  border: 1px solid rgba(120, 200, 255, 0.55);
   border-radius: 2px; padding: 0 12px;
-  color: #aaffba; cursor: pointer;
+  color: #aadfff; cursor: pointer;
   font-family: inherit; font-size: 9px; letter-spacing: 2px;
   transition: all .15s;
 }
-#_dei_panel ._send:hover { background: rgba(40, 140, 60, 0.55); border-color: rgba(120, 255, 150, 0.9); }
+#_dei_panel ._send:hover { background: rgba(40, 100, 180, 0.55); border-color: rgba(120, 200, 255, 0.9); }
 `;
 
 let _cssInjected = false;
