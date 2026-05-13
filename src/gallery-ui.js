@@ -48,14 +48,6 @@ const CSS = `
   position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain;
   transition: opacity .35s;
 }
-#_dei_gal ._main iframe {
-  position: absolute; inset: 0; width: 100%; height: 100%;
-  border: 0; opacity: 0; transition: opacity .35s;
-  pointer-events: none;  /* hand gestures control selection, not iframe drag */
-}
-#_dei_gal ._main iframe._ready { opacity: 1; }
-#_dei_gal ._main iframe._ready + img,
-#_dei_gal ._main img._hidden { opacity: 0; }
 #_dei_gal ._main._locked { border-color: rgba(120, 255, 180, 0.85); box-shadow: 0 0 18px rgba(120, 255, 180, 0.35); }
 #_dei_gal ._meta {
   position: absolute; left: 6px; right: 6px; bottom: 6px;
@@ -138,7 +130,6 @@ export class Gallery {
       <div class="_main">
         <span class="_badge">LOCKED · spawning</span>
         <img alt="" />
-        <iframe allow="autoplay; xr-spatial-tracking" allowfullscreen></iframe>
         <div class="_meta"></div>
         <div class="_loader">searching…</div>
       </div>
@@ -150,12 +141,9 @@ export class Gallery {
     this.qEl = root.querySelector('._q');
     this.mainEl = root.querySelector('._main');
     this.imgEl = root.querySelector('._main img');
-    this.iframeEl = root.querySelector('._main iframe');
     this.metaEl = root.querySelector('._meta');
     this.loaderEl = root.querySelector('._loader');
     this.stripEl = root.querySelector('._strip');
-    this._iframeLoadT = null;
-    this.iframeEl.addEventListener('load', () => this.iframeEl.classList.add('_ready'));
     root.querySelector('._x').onclick = () => this.cancel();
   }
 
@@ -165,8 +153,6 @@ export class Gallery {
     this.locked = false;
     this.mainEl.classList.remove('_locked');
     this.root.classList.remove('_lockedState');
-    clearTimeout(this._iframeLoadT);
-    if (this.iframeEl) { this.iframeEl.classList.remove('_ready'); this.iframeEl.src = 'about:blank'; }
   }
 
   setQuery(q) { this.qEl.textContent = q || '—'; }
@@ -213,20 +199,9 @@ export class Gallery {
     const m = this.results[i];
     if (!m) return;
 
-    // Static thumbnail shows immediately for snappy scroll.
     this.imgEl.style.opacity = '1';
     this.imgEl.src = m.thumbnailLarge || m.thumbnail || '';
     this.imgEl.alt = m.name;
-
-    // 3D iframe preview loads after a short settle (so fast wave-scroll
-    // doesn't reload the iframe per step).
-    this.iframeEl.classList.remove('_ready');
-    this.iframeEl.src = 'about:blank';
-    clearTimeout(this._iframeLoadT);
-    this._iframeLoadT = setTimeout(() => {
-      const params = 'autospin=1&autostart=1&ui_infos=0&ui_controls=0&ui_inspector=0&ui_settings=0&ui_watermark_link=0&ui_help=0&ui_stop=0&transparent=1&preload=1&dnt=1';
-      this.iframeEl.src = `https://sketchfab.com/models/${m.uid}/embed?${params}`;
-    }, 450);
 
     this.metaEl.textContent = `${m.name}${m.author ? ' · @' + m.author : ''}${m.license ? ' · ' + m.license : ''}`;
     [...this.stripEl.children].forEach((c, idx) => {
