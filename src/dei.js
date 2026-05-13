@@ -320,13 +320,15 @@ class DEI {
       });
       group.position.copy(scenePos);
       this.scene.add(group);
+      // No radius/baseScale passed in — Grabbable auto-detects from the
+      // post-normalize bounding sphere and preserves the Sketchfab scale.
+      // Same default interaction as the original basketball: grab / scale / rotate / throw.
       const g = this.makeGrabbable(group, {
-        radius: 0.10,
         physics: !!this.physics,
         mass: 0.4,
         scalable: true,
-        minScale: 0.3,
-        maxScale: 12,        // allow scaling up to ~real-world sizes
+        minScale: 0.2,
+        maxScale: 12,        // two-hand pinch can scale up toward real-life sizes
       });
       this.events.emit('spawn', { model: pending.model, mesh: group, grabbable: g });
       this.panel?.appendLog?.('sys', `spawned "${pending.model.name}"`);

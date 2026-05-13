@@ -145,13 +145,36 @@ export class HandWaveDetector {
 export class Grabbable {
   constructor(mesh, opts = {}) {
     this.mesh = mesh;
-    this.radius = opts.radius ?? 0.15;
+
+    // Preserve whatever scale the mesh arrived with (e.g. Sketchfab normalize
+    // already applied scale = targetSize/maxDim). applyTransform() multiplies
+    // this by the user-controlled `scale` so we never blow up pre-scaled meshes.
+    this._baseScale = mesh.scale.x || 1;
+
+    // Auto-detect grab radius from the visible bounding sphere — same idea as
+    // the original basketball, where `getBR()` = ballRawR * baseScale * userScale.
+    // Caller can still override with opts.radius.
+    if (opts.radius != null) {
+      this.radius = opts.radius;
+    } else {
+      mesh.updateMatrixWorld(true);
+      const box = new THREE.Box3().setFromObject(mesh);
+      if (!box.isEmpty()) {
+        const sz = box.getSize(new THREE.Vector3());
+        this.radius = Math.max(sz.x, sz.y, sz.z) / 2;
+        if (this.radius < 0.05) this.radius = 0.05;
+        if (this.radius > 0.5)  this.radius = 0.5;   // sanity cap
+      } else {
+        this.radius = 0.15;
+      }
+    }
+
     this.scalable = opts.scalable ?? true;
     this.minScale = opts.minScale ?? 0.2;
     this.maxScale = opts.maxScale ?? 4;
-    this.grabFingerCount = opts.grabFingerCount ?? 4;  // wrap requirement
-    this.pinchOnly = opts.pinchOnly ?? false;          // small-object mode (e.g. bird)
-    this.collide = opts.collide ?? true;               // include in hand-mesh push-out
+    this.grabFingerCount = opts.grabFingerCount ?? 4;
+    this.pinchOnly = opts.pinchOnly ?? false;
+    this.collide = opts.collide ?? true;
     this.followLerp = opts.followLerp ?? 0.85;
     this.rotSlerp = opts.rotSlerp ?? 0.75;
     this.throwBoost = opts.throwBoost ?? 60;
@@ -175,10 +198,13 @@ export class Grabbable {
   applyTransform() {
     this.collider.center = this.mesh.position;
     this.collider.radius = this.radius * this.scale;
-    this.mesh.scale.setScalar(this.mesh.userData._baseScale ? this.mesh.userData._baseScale * this.scale : this.scale);
+    this.mesh.scale.setScalar(this._baseScale * this.scale);
   }
 
-  setBaseScale(s) { this.mesh.userData._baseScale = s; this.applyTransform(); }
+  setBaseScale(s) {
+    this._baseScale = s;
+    this.applyTransform();
+  }
 }
 
 // Iterates Grabbables vs. live hands. One Grabbable can be grabbed per hand.
