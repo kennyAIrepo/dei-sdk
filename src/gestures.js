@@ -58,6 +58,30 @@ export function countNear(sl, target, maxDist) {
   return n;
 }
 
+// ── AABB versions (use these for grab volumes that match the actual object shape) ──
+// Returns distance from point p to nearest face of an AABB; 0 if inside.
+export function distToAABB(p, center, halfExt) {
+  const dx = Math.max(Math.abs(p.x - center.x) - halfExt.x, 0);
+  const dy = Math.max(Math.abs(p.y - center.y) - halfExt.y, 0);
+  const dz = Math.max(Math.abs(p.z - center.z) - halfExt.z, 0);
+  return Math.sqrt(dx * dx + dy * dy + dz * dz);
+}
+export function minLandmarkToAABB(sl, center, halfExt) {
+  if (!sl) return Infinity;
+  let m = Infinity;
+  for (let i = 0; i < 21; i++) {
+    const d = distToAABB(sl[i], center, halfExt);
+    if (d < m) m = d;
+  }
+  return m;
+}
+export function countNearAABB(sl, center, halfExt, surfaceBuffer) {
+  if (!sl) return 0;
+  let n = 0;
+  for (const i of KEY) if (distToAABB(sl[i], center, halfExt) < surfaceBuffer) n++;
+  return n;
+}
+
 // ─────────────────────────────────────────────────────────────────────
 // Thumb-up: thumb extended up, other 4 fingers folded down.
 // Operates on raw normalized landmarks (lower y = higher on screen).
@@ -151,23 +175,23 @@ export class Grabbable {
     // this by the user-controlled `scale` so we never blow up pre-scaled meshes.
     this._baseScale = mesh.scale.x || 1;
 
-    // Auto-detect grab radius from the visible bounding sphere — same idea as
-    // the original basketball, where `getBR()` = ballRawR * baseScale * userScale.
-    // Caller can still override with opts.radius.
-    if (opts.radius != null) {
-      this.radius = opts.radius;
+    // Per-axis half-extents from the actual visible bounding box.
+    // The grab volume and hand-mesh squish use this AABB so the interaction
+    // matches the real object shape (not a sphere around it).
+    mesh.updateMatrixWorld(true);
+    const box = new THREE.Box3().setFromObject(mesh);
+    if (!box.isEmpty()) {
+      const sz = box.getSize(new THREE.Vector3());
+      this._baseHalfExtents = new THREE.Vector3(
+        Math.max(0.02, sz.x / 2),
+        Math.max(0.02, sz.y / 2),
+        Math.max(0.02, sz.z / 2),
+      );
     } else {
-      mesh.updateMatrixWorld(true);
-      const box = new THREE.Box3().setFromObject(mesh);
-      if (!box.isEmpty()) {
-        const sz = box.getSize(new THREE.Vector3());
-        this.radius = Math.max(sz.x, sz.y, sz.z) / 2;
-        if (this.radius < 0.05) this.radius = 0.05;
-        if (this.radius > 0.5)  this.radius = 0.5;   // sanity cap
-      } else {
-        this.radius = 0.15;
-      }
+      this._baseHalfExtents = new THREE.Vector3(0.075, 0.075, 0.075);
     }
+    // Legacy single-radius (for any code still reading collider.radius).
+    this.radius = opts.radius ?? Math.max(this._baseHalfExtents.x, this._baseHalfExtents.y, this._baseHalfExtents.z);
 
     this.scalable = opts.scalable ?? true;
     this.minScale = opts.minScale ?? 0.2;
@@ -178,6 +202,8 @@ export class Grabbable {
     this.followLerp = opts.followLerp ?? 0.85;
     this.rotSlerp = opts.rotSlerp ?? 0.75;
     this.throwBoost = opts.throwBoost ?? 60;
+    this.grabSurfaceBuffer = opts.grabSurfaceBuffer ?? 0.08;   // closest-landmark distance to surface for grab
+    this.grabWrapBuffer    = opts.grabWrapBuffer    ?? 0.13;   // how close 4+ fingers must be to surface
     this.onGrab = opts.onGrab || null;
     this.onRelease = opts.onRelease || null;
     this.onScale = opts.onScale || null;
@@ -186,9 +212,18 @@ export class Grabbable {
     this.position = mesh.position;
     this.quaternion = mesh.quaternion;
 
-    this.collider = { center: mesh.position, radius: this.radius, active: true };
+    this.collider = {
+      center: mesh.position,
+      radius: this.radius,
+      halfExtents: this._baseHalfExtents.clone(),
+      active: true,
+    };
+
     this.grabbed = false;
     this.grabHand = -1;
+    this._everGrabbed = false;
+    this._hoverPhase = Math.random() * Math.PI * 2;
+    this._hoverAnchorY = null;
     this._grabOff = new THREE.Vector3();
     this._grabQO = new THREE.Quaternion();
     this._velHistory = [];
@@ -198,6 +233,7 @@ export class Grabbable {
   applyTransform() {
     this.collider.center = this.mesh.position;
     this.collider.radius = this.radius * this.scale;
+    this.collider.halfExtents.copy(this._baseHalfExtents).multiplyScalar(this.scale);
     this.mesh.scale.setScalar(this._baseScale * this.scale);
   }
 
@@ -260,8 +296,11 @@ export class GrabManager {
     this._twoHandPrevD = 0;
     this._twoHandTarget = null;
 
-    // 2) Per-hand grab logic.
+    // 2) Per-hand grab logic — AABB based, so volume matches actual object shape.
     for (const g of this.targets) {
+      const he = g.collider.halfExtents;
+      const center = g.mesh.position;
+
       // Find closest hand to this object that meets grab criteria.
       let bestH = -1, bestD = Infinity;
       for (let h = 0; h < hc; h++) {
@@ -269,21 +308,22 @@ export class GrabManager {
         if (g.pinchOnly) {
           if (!isPinch(hands[h])) continue;
           const pp = pinchPoint(sls[h]);
-          const d = pp.distanceTo(g.mesh.position);
+          const d = distToAABB(pp, center, he);
           if (d < bestD) { bestD = d; bestH = h; }
         } else {
-          const d = minLandmarkDist(sls[h], g.mesh.position);
+          const d = minLandmarkToAABB(sls[h], center, he);
           if (d < bestD) { bestD = d; bestH = h; }
         }
       }
-      const r = g.radius * g.scale;
+
+      let didGrab = false;
 
       if (g.pinchOnly) {
-        const reach = r * 2 + 0.15;
+        const reach = g.grabSurfaceBuffer + 0.06;
         if (bestH >= 0 && bestD < reach) {
           if (!g.grabbed) {
             const pp = pinchPoint(sls[bestH]);
-            g.grabbed = true; g.grabHand = bestH;
+            g.grabbed = true; g.grabHand = bestH; g._everGrabbed = true;
             g._grabOff.subVectors(g.mesh.position, pp);
             g._grabQO.copy(new THREE.Quaternion()).invert().multiply(g.mesh.quaternion);
             g._velHistory = [];
@@ -298,18 +338,18 @@ export class GrabManager {
             g.mesh.quaternion.slerp(hq.clone().multiply(g._grabQO), g.rotSlerp * 0.4);
             g._velHistory.push(g.mesh.position.clone().sub(prev));
             if (g._velHistory.length > 5) g._velHistory.shift();
-            g.applyTransform();
-            continue;
+            didGrab = true;
           }
         } else if (g.grabbed) {
           this._release(g, events);
         }
       } else {
-        const grabOK = bestH >= 0 && bestD < r + 0.1
-          && countNear(sls[bestH], g.mesh.position, r + 0.1) >= g.grabFingerCount;
+        const grabOK = bestH >= 0
+          && bestD < g.grabSurfaceBuffer
+          && countNearAABB(sls[bestH], center, he, g.grabWrapBuffer) >= g.grabFingerCount;
         if (grabOK) {
           if (!g.grabbed) {
-            g.grabbed = true; g.grabHand = bestH;
+            g.grabbed = true; g.grabHand = bestH; g._everGrabbed = true;
             g._grabOff.subVectors(g.mesh.position, palmCenter(sls[bestH]));
             g._grabQO.copy(handQuat(sls[bestH])).invert().multiply(g.mesh.quaternion);
             g._velHistory = [];
@@ -324,13 +364,24 @@ export class GrabManager {
             g.mesh.quaternion.slerp(hq.clone().multiply(g._grabQO), g.rotSlerp);
             g._velHistory.push(g.mesh.position.clone().sub(prev));
             if (g._velHistory.length > 5) g._velHistory.shift();
-            g.applyTransform();
-            continue;
+            didGrab = true;
           }
         } else if (g.grabbed) {
           this._release(g, events);
         }
       }
+
+      // Idle hover bob — only before the first grab, while no physics is driving it.
+      const inPhys = !!g.userData?.physActive;
+      const idle = !didGrab && !inPhys && !g._everGrabbed;
+      if (idle) {
+        if (g._hoverAnchorY == null) g._hoverAnchorY = g.mesh.position.y;
+        g._hoverPhase += (dt || 0.016) * 1.4;
+        g.mesh.position.y = g._hoverAnchorY + Math.sin(g._hoverPhase) * 0.006;
+      } else {
+        g._hoverAnchorY = null;
+      }
+
       g.applyTransform();
     }
   }

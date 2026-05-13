@@ -115,15 +115,36 @@ export class RiggedHand {
       }
       v.set(px, py, pz).applyMatrix4(cf);
       for (const col of this.colliders) {
-        if (!col.active || !col.radius) continue;
-        const d = v.distanceTo(col.center);
-        if (d < col.radius) {
-          const dir = v.clone().sub(col.center);
-          if (dir.length() > .0001) {
-            dir.normalize().multiplyScalar(col.radius);
-            v.copy(col.center).add(dir);
+        if (!col.active) continue;
+        if (col.halfExtents) {
+          // AABB push-out — matches the actual object bounds, not a single sphere.
+          const he = col.halfExtents, c = col.center;
+          const dx = v.x - c.x, dy = v.y - c.y, dz = v.z - c.z;
+          if (Math.abs(dx) < he.x && Math.abs(dy) < he.y && Math.abs(dz) < he.z) {
+            // Inside box: push to the nearest face (smallest penetration depth).
+            const pX = he.x - Math.abs(dx);
+            const pY = he.y - Math.abs(dy);
+            const pZ = he.z - Math.abs(dz);
+            if (pX <= pY && pX <= pZ) {
+              v.x = c.x + (dx >= 0 ? he.x : -he.x);
+            } else if (pY <= pZ) {
+              v.y = c.y + (dy >= 0 ? he.y : -he.y);
+            } else {
+              v.z = c.z + (dz >= 0 ? he.z : -he.z);
+            }
+            cc++;
           }
-          cc++;
+        } else if (col.radius) {
+          // Legacy sphere push-out — kept for any older callers without halfExtents.
+          const d = v.distanceTo(col.center);
+          if (d < col.radius) {
+            const dir = v.clone().sub(col.center);
+            if (dir.length() > .0001) {
+              dir.normalize().multiplyScalar(col.radius);
+              v.copy(col.center).add(dir);
+            }
+            cc++;
+          }
         }
       }
       pa[vi*3] = v.x; pa[vi*3+1] = v.y; pa[vi*3+2] = v.z;
