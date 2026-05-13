@@ -1,6 +1,9 @@
 import * as THREE from 'three';
 import { PINCH_TH } from './constants.js';
 
+const _yAxis = new THREE.Vector3(0, 1, 0);
+const _showcaseQ = new THREE.Quaternion();
+
 // Raw-landmark predicates (operate on MediaPipe normalized coords)
 export function isPinch(lm, threshold = PINCH_TH) {
   return Math.hypot(
@@ -36,6 +39,54 @@ export function handQuat(sl) {
   return new THREE.Quaternion().setFromRotationMatrix(
     new THREE.Matrix4().makeBasis(rt, up, fw)
   );
+}
+
+// Palm-facing direction (the "forward" axis of handQuat). For a right hand
+// held palm-up, this vector points roughly +Y in scene space.
+export function palmNormal(sl) {
+  const up = new THREE.Vector3().subVectors(sl[9], sl[0]).normalize();
+  const ac = new THREE.Vector3().subVectors(sl[5], sl[17]).normalize();
+  return new THREE.Vector3().crossVectors(up, ac).normalize();
+}
+
+// "Cup" gesture: two hands held palms-up, near each other in front of the body.
+// Triggers onCup() when held for `holdMs`. Used to re-summon dropped objects.
+export class CupGestureDetector {
+  constructor({
+    holdMs = 500,
+    cooldown = 1.2,
+    maxHandGap = 0.55,    // max scene-space distance between wrists
+    maxYDiff   = 0.18,    // wrists must be at similar height
+    minPalmUpY = 0.45,    // palm normal Y must exceed this on both hands
+    onCup = null,
+  } = {}) {
+    this.holdMs = holdMs;
+    this.cooldown = cooldown;
+    this.maxHandGap = maxHandGap;
+    this.maxYDiff = maxYDiff;
+    this.minPalmUpY = minPalmUpY;
+    this.onCup = onCup;
+    this._holdT = 0;
+    this._cool = 0;
+  }
+  update(hands, sls, dt) {
+    this._cool = Math.max(0, this._cool - dt);
+    if (this._cool > 0) return;
+    if (!hands || !sls || hands.length < 2 || !sls[0] || !sls[1]) { this._holdT = 0; return; }
+    const n0 = palmNormal(sls[0]);
+    const n1 = palmNormal(sls[1]);
+    if (n0.y < this.minPalmUpY || n1.y < this.minPalmUpY) { this._holdT = 0; return; }
+    const w0 = sls[0][0], w1 = sls[1][0];
+    const gap = w0.distanceTo(w1);
+    const yDiff = Math.abs(w0.y - w1.y);
+    if (gap > this.maxHandGap || yDiff > this.maxYDiff) { this._holdT = 0; return; }
+    this._holdT += (dt || 0.016) * 1000;
+    if (this._holdT >= this.holdMs) {
+      this._holdT = 0;
+      this._cool = this.cooldown;
+      this.onCup?.({ midpoint: w0.clone().add(w1).multiplyScalar(0.5) });
+    }
+  }
 }
 
 // Distance from object center to nearest landmark.
@@ -222,8 +273,8 @@ export class Grabbable {
     this.grabbed = false;
     this.grabHand = -1;
     this._everGrabbed = false;
-    this._hoverPhase = Math.random() * Math.PI * 2;
-    this._hoverAnchorY = null;
+    this._spawnPos = null;                    // set by host on spawn; cup gesture summons back here
+    this.spinSpeed = opts.spinSpeed ?? 0.55;  // rad/s showcase rotation while idle
     this._grabOff = new THREE.Vector3();
     this._grabQO = new THREE.Quaternion();
     this._velHistory = [];
@@ -371,15 +422,13 @@ export class GrabManager {
         }
       }
 
-      // Idle hover bob — only before the first grab, while no physics is driving it.
+      // Showcase Y-spin when idle (not being grabbed, not in physics).
+      // Position stays static — only quaternion rotates around world Y.
       const inPhys = !!g.userData?.physActive;
-      const idle = !didGrab && !inPhys && !g._everGrabbed;
+      const idle = !didGrab && !inPhys;
       if (idle) {
-        if (g._hoverAnchorY == null) g._hoverAnchorY = g.mesh.position.y;
-        g._hoverPhase += (dt || 0.016) * 1.4;
-        g.mesh.position.y = g._hoverAnchorY + Math.sin(g._hoverPhase) * 0.006;
-      } else {
-        g._hoverAnchorY = null;
+        _showcaseQ.setFromAxisAngle(_yAxis, g.spinSpeed * (dt || 0.016));
+        g.mesh.quaternion.premultiply(_showcaseQ);
       }
 
       g.applyTransform();

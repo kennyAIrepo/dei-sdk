@@ -1,4 +1,3 @@
-import * as THREE from 'three';
 import { BODY_SEGS } from './constants.js';
 
 // Lazy-loaded cannon-es. World owns floor (kinematic), body capsules (kinematic),
@@ -122,16 +121,43 @@ export function poseToBodyPoints(poseLandmarks, mp2s) {
   return pts;
 }
 
-// Returns lowest scene-Y of any foot landmark (27-32). Use with Physics.setFloorY.
+// Returns scene-Y of the floor.
+// Preferred: lowest visible foot landmark.
+// Fallback 1: hip midpoint minus ~0.9m (typical adult hip→floor).
+// Fallback 2: shoulder midpoint minus ~1.5m.
+// Last: null (caller keeps previous value).
 export function detectFloorY(poseLandmarks, mp2s) {
   if (!poseLandmarks) return null;
+  const VIS = 0.3;
+
   const feet = [27, 28, 29, 30, 31, 32];
   let lowest = Infinity;
   for (const fi of feet) {
-    if (poseLandmarks[fi]) {
-      const v = mp2s(poseLandmarks[fi]);
+    const lm = poseLandmarks[fi];
+    if (lm && (lm.visibility == null || lm.visibility >= VIS)) {
+      const v = mp2s(lm);
       if (v.y < lowest) lowest = v.y;
     }
   }
-  return lowest === Infinity ? null : lowest - 0.05;
+  if (lowest !== Infinity) return lowest - 0.05;
+
+  const hipL = poseLandmarks[23], hipR = poseLandmarks[24];
+  const hipsVisible = hipL && hipR
+    && (hipL.visibility == null || hipL.visibility >= VIS)
+    && (hipR.visibility == null || hipR.visibility >= VIS);
+  if (hipsVisible) {
+    const hipMidY = mp2s({ x:(hipL.x+hipR.x)/2, y:(hipL.y+hipR.y)/2, z:0 }).y;
+    return hipMidY - 0.9;
+  }
+
+  const shL = poseLandmarks[11], shR = poseLandmarks[12];
+  const shoulVisible = shL && shR
+    && (shL.visibility == null || shL.visibility >= VIS)
+    && (shR.visibility == null || shR.visibility >= VIS);
+  if (shoulVisible) {
+    const shMidY = mp2s({ x:(shL.x+shR.x)/2, y:(shL.y+shR.y)/2, z:0 }).y;
+    return shMidY - 1.5;
+  }
+
+  return null;
 }

@@ -12,7 +12,7 @@ import { DEFAULT_HAND_MODEL_URL } from './constants.js';
 import { makeMp2s } from './coords.js';
 import { loadRiggedHands } from './rigged-hand.js';
 import { initTracking, makeDetector } from './tracking.js';
-import { Grabbable, GrabManager, ThumbUpTrigger, HandWaveDetector, isPinch, pinchPoint } from './gestures.js';
+import { Grabbable, GrabManager, ThumbUpTrigger, HandWaveDetector, CupGestureDetector } from './gestures.js';
 import { Physics, poseToBodyPoints, detectFloorY } from './physics.js';
 import { VoiceController } from './voice.js';
 import { VoicePanel } from './spatial-ui.js';
@@ -48,7 +48,8 @@ class DEI {
     this._sketchfab = null;             // { searchUrl, downloadUrl } or null
     this._waveDet = [null, null];       // per-hand HandWaveDetector
     this._thumbTrig = [null, null];     // per-hand ThumbUpTrigger
-    this._pendingSpawn = null;          // { model } locked but not yet pinch-grabbed
+    this._cupDet = null;                // two-hand cup detector (re-summons dropped objects)
+    this._spawnAnchor = new THREE.Vector3(0, 0, 0); // updated per-frame from body chest
     this._tracker = null;
     this._detect = null;
     this._clock = new THREE.Clock();
@@ -201,9 +202,19 @@ class DEI {
             onSwipe: (dir) => { if (this.gallery?.root.classList.contains('show')) this.gallery.scroll(dir); },
           });
           this._thumbTrig[h] = new ThumbUpTrigger({
-            onUp: () => { if (this.gallery?.root.classList.contains('show')) this.gallery.lock(); },
+            onUp: () => {
+              if (!this.gallery?.root.classList.contains('show')) return;
+              this.gallery.lock();
+              // Thumb-up confirms → object spawns immediately at scene center;
+              // no separate pinch step required.
+              this._spawnLockedAt(this._spawnAnchor.clone());
+            },
           });
         }
+        // Two-hand palms-up "cup" gesture → re-summon dropped objects.
+        this._cupDet = new CupGestureDetector({
+          onCup: () => this._summonDroppedObjects(),
+        });
         // Hook noMatch → intent parser → gallery search.
         this.events.on('noMatch', (text) => this._handleSpawnText(text));
       }
@@ -316,25 +327,47 @@ class DEI {
     try {
       const { group } = await loadModel(pending.model.uid, {
         ...this._sketchfab,
-        targetSize: 0.75,   // ~5x previous default; user scales up/down via two-hand pinch
+        targetSize: 0.75,
       });
       group.position.copy(scenePos);
       this.scene.add(group);
-      // No radius/baseScale passed in — Grabbable auto-detects from the
-      // post-normalize bounding sphere and preserves the Sketchfab scale.
-      // Same default interaction as the original basketball: grab / scale / rotate / throw.
       const g = this.makeGrabbable(group, {
         physics: !!this.physics,
         mass: 0.4,
         scalable: true,
         minScale: 0.2,
-        maxScale: 12,        // two-hand pinch can scale up toward real-life sizes
+        maxScale: 12,
       });
+      g._spawnPos = scenePos.clone();        // remembered for cup-gesture re-summon
+      g._sketchfabModel = pending.model;     // metadata
       this.events.emit('spawn', { model: pending.model, mesh: group, grabbable: g });
-      this.panel?.appendLog?.('sys', `spawned "${pending.model.name}"`);
+      this.panel?.appendLog?.('sys', `spawned "${pending.model.name}" — show palms up to re-summon`);
     } catch (e) {
       console.warn('spawn failed:', e);
       this.panel?.appendLog?.('err', `couldn't load "${pending.model.name}"`);
+    }
+  }
+
+  // Re-summon: any Grabbable that's been physics-dropped returns to its spawn
+  // position and resumes the showcase spin. Triggered by the two-hand cup gesture.
+  _summonDroppedObjects() {
+    if (!this.grab?.targets?.length) return;
+    let summoned = 0;
+    for (const g of this.grab.targets) {
+      if (!g._spawnPos) continue;
+      const dropped = !!g.userData?.physActive;
+      const farFromSpawn = g.mesh.position.distanceTo(g._spawnPos) > 0.05;
+      if (!dropped && !farFromSpawn) continue;
+      this.physics?.pickUp(g);              // disables physActive
+      g.mesh.position.copy(g._spawnPos);
+      g.mesh.quaternion.identity();
+      g.grabbed = false; g.grabHand = -1; g._velHistory = [];
+      g.applyTransform();
+      summoned++;
+    }
+    if (summoned) {
+      this.events.emit('summon', { count: summoned });
+      this.panel?.appendLog?.('sys', `summoned ${summoned} object${summoned > 1 ? 's' : ''} back`);
     }
   }
 
@@ -364,23 +397,24 @@ class DEI {
       sls[h] = this.hands[h].map(this.mp2s);
     }
 
-    // Gallery gestures — wave to scroll, thumb-up to lock, pinch to spawn.
+    // Spawn anchor = body chest (shoulder midpoint) if visible, else scene origin.
+    if (this.bodyPts && this.bodyPts[1]) {
+      this._spawnAnchor.copy(this.bodyPts[1]).setZ(0);
+    } else {
+      this._spawnAnchor.set(0, 0, 0);
+    }
+
+    // Gallery gestures — wave to scroll, thumb-up to confirm + spawn.
     if (this.gallery) {
       const visible = this.gallery.root.classList.contains('show');
       for (let h = 0; h < Math.min(this.handCount, 2); h++) {
         const lm = this.hands?.[h];
         if (!lm) continue;
-        if (visible && !this.gallery.locked) {
-          this._waveDet[h]?.update(lm[0], dt);
-        }
-        if (visible) {
-          this._thumbTrig[h]?.update(lm, dt);
-        }
-        // Pinch-to-spawn: when locked, a pinch grabs the model into the scene.
-        if (this._pendingSpawn && sls[h] && isPinch(lm)) {
-          this._spawnLockedAt(pinchPoint(sls[h]));
-        }
+        if (visible && !this.gallery.locked) this._waveDet[h]?.update(lm[0], dt);
+        if (visible) this._thumbTrig[h]?.update(lm, dt);
       }
+      // Two-hand cup gesture works whenever the gallery is closed.
+      if (!visible) this._cupDet?.update(this.hands, sls, dt);
     }
 
     // Gestures BEFORE deform — so collider centers are current when hand-mesh skins.
