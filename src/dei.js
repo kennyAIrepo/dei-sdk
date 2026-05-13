@@ -316,7 +316,7 @@ class DEI {
     try {
       const { group } = await loadModel(pending.model.uid, {
         ...this._sketchfab,
-        targetSize: 0.15,   // small enough to fit in hand by default; user scales up via two-hand pinch
+        targetSize: 0.75,   // ~5x previous default; user scales up/down via two-hand pinch
       });
       group.position.copy(scenePos);
       this.scene.add(group);
