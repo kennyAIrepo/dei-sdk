@@ -353,16 +353,20 @@ export class GrabManager {
       const center = g.mesh.position;
 
       // Find closest hand to this object that meets grab criteria.
+      // Uses center-distance detection (matching dei_full.html basketball grab):
+      // grab fires when a landmark enters a sphere of radius (g.radius + 0.1) around
+      // the object center — so palm center is already near/inside the object and
+      // grabOff stays small, preventing the floating-at-a-distance gap.
       let bestH = -1, bestD = Infinity;
       for (let h = 0; h < hc; h++) {
         if (!sls[h]) continue;
         if (g.pinchOnly) {
           if (!isPinch(hands[h])) continue;
           const pp = pinchPoint(sls[h]);
-          const d = distToAABB(pp, center, he);
+          const d = pp.distanceTo(center);
           if (d < bestD) { bestD = d; bestH = h; }
         } else {
-          const d = minLandmarkToAABB(sls[h], center, he);
+          const d = minLandmarkDist(sls[h], center);
           if (d < bestD) { bestD = d; bestH = h; }
         }
       }
@@ -370,7 +374,7 @@ export class GrabManager {
       let didGrab = false;
 
       if (g.pinchOnly) {
-        const reach = g.grabSurfaceBuffer + 0.06;
+        const reach = g.radius + 0.1;
         if (bestH >= 0 && bestD < reach) {
           if (!g.grabbed) {
             const pp = pinchPoint(sls[bestH]);
@@ -395,9 +399,12 @@ export class GrabManager {
           this._release(g, events);
         }
       } else {
+        // Non-pinch: mirror dei_full.html — grab when closest landmark is within
+        // (radius + 0.1) of center AND 4+ key landmarks are in the same sphere.
+        const grabR = g.radius + 0.1;
         const grabOK = bestH >= 0
-          && bestD < g.grabSurfaceBuffer
-          && countNearAABB(sls[bestH], center, he, g.grabWrapBuffer) >= g.grabFingerCount;
+          && bestD < grabR
+          && countNear(sls[bestH], center, grabR) >= g.grabFingerCount;
         if (grabOK) {
           if (!g.grabbed) {
             g.grabbed = true; g.grabHand = bestH; g._everGrabbed = true;
@@ -422,10 +429,11 @@ export class GrabManager {
         }
       }
 
-      // Showcase Y-spin when idle (not being grabbed, not in physics).
-      // Position stays static — only quaternion rotates around world Y.
+      // Showcase Y-spin only while the object has never been physically dropped.
+      // Once it's been grabbed+released (physActive ever set) it should sit still on
+      // the floor, not keep spinning — exactly like the original dei_full.html ball.
       const inPhys = !!g.userData?.physActive;
-      const idle = !didGrab && !inPhys;
+      const idle = !didGrab && !inPhys && !g._everGrabbed;
       if (idle) {
         _showcaseQ.setFromAxisAngle(_yAxis, g.spinSpeed * (dt || 0.016));
         g.mesh.quaternion.premultiply(_showcaseQ);

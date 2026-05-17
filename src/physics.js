@@ -68,15 +68,23 @@ export class Physics {
         mass,
         shape: new this.CANNON.Sphere(r),
         material: this._ballMat,
+        linearDamping: 0.1,
+        angularDamping: 0.6,   // high: object stops spinning quickly after landing
       });
       this.world.addBody(b);
       this.dynamics.set(g, b);
     }
     b.shapes[0] = new this.CANNON.Sphere(r);
     b.updateBoundingRadius();
+    b.linearDamping = 0.1;
+    b.angularDamping = 0.6;
     b.position.set(g.mesh.position.x, g.mesh.position.y, g.mesh.position.z);
     b.velocity.set(velocity.x, velocity.y, velocity.z);
-    b.angularVelocity.set(Math.random()*2-1, Math.random()*2-1, Math.random()*2-1);
+    b.angularVelocity.set(
+      (Math.random() * 2 - 1) * 0.5,
+      (Math.random() * 2 - 1) * 0.5,
+      (Math.random() * 2 - 1) * 0.5
+    );
     g.userData = g.userData || {};
     g.userData.physActive = true;
   }
@@ -84,6 +92,8 @@ export class Physics {
   pickUp(g) {
     g.userData = g.userData || {};
     g.userData.physActive = false;
+    const b = this.dynamics.get(g);
+    if (b) { b.velocity.set(0, 0, 0); b.angularVelocity.set(0, 0, 0); }
   }
 
   step(dt) {
@@ -91,6 +101,11 @@ export class Physics {
     this.world.step(1 / 60, dt, 3);
     for (const [g, b] of this.dynamics) {
       if (!g.userData?.physActive) continue;
+      // Kill residual spin once the body has settled (both linear and angular velocity tiny).
+      if (b.velocity.length() < 0.05 && b.angularVelocity.length() < 0.1) {
+        b.velocity.set(0, 0, 0);
+        b.angularVelocity.set(0, 0, 0);
+      }
       g.mesh.position.set(b.position.x, b.position.y, b.position.z);
       g.mesh.quaternion.set(b.quaternion.x, b.quaternion.y, b.quaternion.z, b.quaternion.w);
       // Recover if it tunnels past floor.
@@ -98,6 +113,7 @@ export class Physics {
         g.mesh.position.y = this.floorY + g.radius * g.scale;
         b.position.y = g.mesh.position.y;
         b.velocity.set(0, 0, 0);
+        b.angularVelocity.set(0, 0, 0);
       }
     }
   }
